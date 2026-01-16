@@ -34,7 +34,9 @@ export function getValidActions(
   }
 
   // Can raise if have enough chips
-  const minRaise = hand.current_bet + bigBlind;
+  // Min raise = current_bet + last_raise (the previous raise increment)
+  const lastRaise = hand.last_raise || bigBlind;
+  const minRaise = hand.current_bet + lastRaise;
   if (remainingChips > toCall && remainingChips >= minRaise - playerHand.current_bet) {
     if (remainingChips === minRaise - playerHand.current_bet) {
       // Can only raise to exactly one amount (all-in)

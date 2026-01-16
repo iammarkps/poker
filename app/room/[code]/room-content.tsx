@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useGame } from "@/components/game/game-provider";
 import { Lobby } from "./lobby";
 import { PokerGame } from "./poker-game";
@@ -20,9 +21,9 @@ export function RoomContent() {
       <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-900 to-green-950">
         <div className="text-center text-white">
           <p className="text-lg">{error || "Room not found"}</p>
-          <a href="/" className="text-green-300 hover:underline mt-2 inline-block">
+          <Link href="/" className="text-green-300 hover:underline mt-2 inline-block">
             Go back home
-          </a>
+          </Link>
         </div>
       </main>
     );

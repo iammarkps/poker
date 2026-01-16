@@ -113,6 +113,8 @@ export async function POST(
         current_seat: firstToAct,
         phase: "preflop",
         deck,
+        last_raise: room.big_blind,
+        turn_start_time: new Date().toISOString(),
       })
       .select()
       .single();

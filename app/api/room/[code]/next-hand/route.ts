@@ -97,6 +97,24 @@ export async function POST(
     // Get new version number
     const newVersion = (lastHand?.version ?? 0) + 1;
 
+    // Increment hand count and check for time bank replenishment
+    const newHandCount = (room.hand_count || 0) + 1;
+    await supabase
+      .from("rooms")
+      .update({ hand_count: newHandCount })
+      .eq("id", room.id);
+
+    // Every 10 hands, add 1 time bank (up to 5 max)
+    if (newHandCount % 10 === 0) {
+      for (const player of players) {
+        const newTimeBank = Math.min((player.time_bank || 3) + 1, 5);
+        await supabase
+          .from("players")
+          .update({ time_bank: newTimeBank })
+          .eq("id", player.id);
+      }
+    }
+
     // Create new hand
     const { data: hand, error: handError } = await supabase
       .from("hands")
@@ -110,6 +128,8 @@ export async function POST(
         phase: "preflop",
         deck,
         version: newVersion,
+        last_raise: room.big_blind,
+        turn_start_time: new Date().toISOString(),
       })
       .select()
       .single();

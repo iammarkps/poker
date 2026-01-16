@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Room, Player, Hand, PlayerHand } from "@/lib/supabase/types";
 
@@ -25,6 +25,8 @@ export function useGameState(roomCode: string, sessionId: string | null) {
     error: null,
   });
 
+  const isMounted = useRef(true);
+
   const fetchGameState = useCallback(async () => {
     if (!sessionId) return;
 
@@ -37,6 +39,8 @@ export function useGameState(roomCode: string, sessionId: string | null) {
       .eq("code", roomCode)
       .single();
 
+    if (!isMounted.current) return;
+
     if (roomError || !room) {
       setState((prev) => ({ ...prev, isLoading: false, error: "Room not found" }));
       return;
@@ -48,6 +52,8 @@ export function useGameState(roomCode: string, sessionId: string | null) {
       .select("*")
       .eq("room_id", room.id)
       .order("seat");
+
+    if (!isMounted.current) return;
 
     // Find my player
     const myPlayer = players?.find((p) => p.session_id === sessionId);
@@ -66,6 +72,8 @@ export function useGameState(roomCode: string, sessionId: string | null) {
         .limit(1)
         .single();
 
+      if (!isMounted.current) return;
+
       hand = handData;
 
       if (hand) {
@@ -73,6 +81,8 @@ export function useGameState(roomCode: string, sessionId: string | null) {
           .from("player_hands")
           .select("*")
           .eq("hand_id", hand.id);
+
+        if (!isMounted.current) return;
 
         playerHands = playerHandsData || [];
         myPlayerHand = playerHands.find((ph) => ph.player_id === myPlayer?.id) || null;
@@ -91,11 +101,17 @@ export function useGameState(roomCode: string, sessionId: string | null) {
   }, [roomCode, sessionId]);
 
   useEffect(() => {
+    isMounted.current = true;
+
     if (!sessionId) return;
 
-    fetchGameState();
-
     const supabase = createClient();
+
+    // Initial fetch - wrapped in async IIFE to handle the promise
+    const initFetch = async () => {
+      await fetchGameState();
+    };
+    initFetch();
 
     // Subscribe to room changes
     const roomChannel = supabase
@@ -108,7 +124,9 @@ export function useGameState(roomCode: string, sessionId: string | null) {
           table: "rooms",
           filter: `code=eq.${roomCode}`,
         },
-        () => fetchGameState()
+        () => {
+          fetchGameState();
+        }
       )
       .on(
         "postgres_changes",
@@ -117,7 +135,9 @@ export function useGameState(roomCode: string, sessionId: string | null) {
           schema: "public",
           table: "players",
         },
-        () => fetchGameState()
+        () => {
+          fetchGameState();
+        }
       )
       .on(
         "postgres_changes",
@@ -126,7 +146,9 @@ export function useGameState(roomCode: string, sessionId: string | null) {
           schema: "public",
           table: "hands",
         },
-        () => fetchGameState()
+        () => {
+          fetchGameState();
+        }
       )
       .on(
         "postgres_changes",
@@ -135,11 +157,14 @@ export function useGameState(roomCode: string, sessionId: string | null) {
           schema: "public",
           table: "player_hands",
         },
-        () => fetchGameState()
+        () => {
+          fetchGameState();
+        }
       )
       .subscribe();
 
     return () => {
+      isMounted.current = false;
       supabase.removeChannel(roomChannel);
     };
   }, [roomCode, sessionId, fetchGameState]);

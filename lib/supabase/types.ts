@@ -20,6 +20,7 @@ export type Database = {
           starting_chips: number;
           max_players: number;
           created_at: string;
+          hand_count: number;
         };
         Insert: {
           id?: string;
@@ -31,6 +32,7 @@ export type Database = {
           starting_chips?: number;
           max_players?: number;
           created_at?: string;
+          hand_count?: number;
         };
         Update: {
           id?: string;
@@ -42,6 +44,7 @@ export type Database = {
           starting_chips?: number;
           max_players?: number;
           created_at?: string;
+          hand_count?: number;
         };
       };
       players: {
@@ -53,6 +56,7 @@ export type Database = {
           seat: number | null;
           chips: number;
           is_connected: boolean;
+          time_bank: number;
         };
         Insert: {
           id?: string;
@@ -62,6 +66,7 @@ export type Database = {
           seat?: number | null;
           chips: number;
           is_connected?: boolean;
+          time_bank?: number;
         };
         Update: {
           id?: string;
@@ -71,6 +76,7 @@ export type Database = {
           seat?: number | null;
           chips?: number;
           is_connected?: boolean;
+          time_bank?: number;
         };
       };
       hands: {
@@ -85,6 +91,8 @@ export type Database = {
           phase: "preflop" | "flop" | "turn" | "river" | "showdown";
           deck: string[];
           version: number;
+          last_raise: number;
+          turn_start_time: string | null;
         };
         Insert: {
           id?: string;
@@ -97,6 +105,8 @@ export type Database = {
           phase?: "preflop" | "flop" | "turn" | "river" | "showdown";
           deck: string[];
           version?: number;
+          last_raise?: number;
+          turn_start_time?: string | null;
         };
         Update: {
           id?: string;
@@ -109,6 +119,8 @@ export type Database = {
           phase?: "preflop" | "flop" | "turn" | "river" | "showdown";
           deck?: string[];
           version?: number;
+          last_raise?: number;
+          turn_start_time?: string | null;
         };
       };
       player_hands: {
@@ -178,3 +190,12 @@ export type Player = Database["public"]["Tables"]["players"]["Row"];
 export type Hand = Database["public"]["Tables"]["hands"]["Row"];
 export type PlayerHand = Database["public"]["Tables"]["player_hands"]["Row"];
 export type Action = Database["public"]["Tables"]["actions"]["Row"];
+
+export interface AddonRequest {
+  id: string;
+  room_id: string;
+  player_id: string;
+  amount: number;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+}

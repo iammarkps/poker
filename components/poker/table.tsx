@@ -4,6 +4,7 @@ import { useGame } from "@/components/game/game-provider";
 import { Seat } from "./seat";
 import { CommunityCards } from "./community-cards";
 import { PotDisplay } from "./pot-display";
+import { evaluateHand } from "@/lib/poker/hand-evaluator";
 
 // Seat positions around an oval table (9 seats)
 // Positions are percentages from center
@@ -34,6 +35,57 @@ export function PokerTable() {
 
   const showdownPhase = hand.phase === "showdown";
 
+  // Calculate winners at showdown to only show winning cards
+  const winnerPlayerIds = new Set<string>();
+  if (showdownPhase) {
+    const activePlayers = players.filter((p) => {
+      const ph = playerToHand.get(p.id);
+      return ph && !ph.is_folded;
+    });
+
+    // If only one player remains, they're the winner (no cards shown)
+    if (activePlayers.length === 1) {
+      winnerPlayerIds.add(activePlayers[0].id);
+    } else if (activePlayers.length > 1) {
+      // Evaluate hands and find winner(s)
+      const evaluated = activePlayers.map((player) => {
+        const ph = playerToHand.get(player.id);
+        const evalHand = ph ? evaluateHand(ph.hole_cards, hand.community_cards) : null;
+        return { player, hand: evalHand };
+      });
+
+      const sorted = evaluated
+        .filter((e) => e.hand)
+        .sort((a, b) => {
+          if (!a.hand || !b.hand) return 0;
+          if (a.hand.rank !== b.hand.rank) return b.hand.rank - a.hand.rank;
+          for (let i = 0; i < Math.min(a.hand.values.length, b.hand.values.length); i++) {
+            if (a.hand.values[i] !== b.hand.values[i]) {
+              return b.hand.values[i] - a.hand.values[i];
+            }
+          }
+          return 0;
+        });
+
+      // All players with the same winning hand are winners
+      sorted.forEach((e) => {
+        if (e.hand && sorted[0].hand && e.hand.rank === sorted[0].hand.rank) {
+          // Check kickers too
+          let isWinner = true;
+          for (let i = 0; i < Math.min(e.hand.values.length, sorted[0].hand.values.length); i++) {
+            if (e.hand.values[i] !== sorted[0].hand.values[i]) {
+              isWinner = false;
+              break;
+            }
+          }
+          if (isWinner) {
+            winnerPlayerIds.add(e.player.id);
+          }
+        }
+      });
+    }
+  }
+
   return (
     <div className="relative w-full max-w-4xl aspect-[16/10]">
       {/* Table felt */}
@@ -41,7 +93,11 @@ export function PokerTable() {
 
       {/* Center content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-        <PotDisplay pot={hand.pot} currentBet={hand.current_bet} />
+        <PotDisplay
+          pot={hand.pot}
+          currentBet={hand.current_bet}
+          myBet={myPlayerHand?.current_bet}
+        />
         <CommunityCards cards={hand.community_cards} />
       </div>
 
@@ -51,13 +107,17 @@ export function PokerTable() {
         const player = seatToPlayer.get(seatNum);
         const playerHand = player ? playerToHand.get(player.id) : undefined;
 
-        // Get hole cards - only show own cards or during showdown
+        // Get hole cards - only show own cards or winner's cards during showdown
         let holeCards: string[] | undefined;
         if (player?.id === myPlayer?.id && myPlayerHand) {
+          // Always show own cards
           holeCards = myPlayerHand.hole_cards;
-        } else if (showdownPhase && playerHand && !playerHand.is_folded) {
+        } else if (showdownPhase && player && winnerPlayerIds.has(player.id) && playerHand) {
+          // At showdown, only show winner's cards (losers muck)
           holeCards = playerHand.hole_cards;
         }
+
+        const isWinner = showdownPhase && player && winnerPlayerIds.has(player.id);
 
         return (
           <div
@@ -75,7 +135,8 @@ export function PokerTable() {
               isCurrentTurn={hand.current_seat === seatNum}
               isDealer={hand.dealer_seat === seatNum}
               isMe={player?.id === myPlayer?.id}
-              showCards={showdownPhase}
+              showCards={!!(showdownPhase && isWinner)}
+              isWinner={isWinner || false}
             />
           </div>
         );

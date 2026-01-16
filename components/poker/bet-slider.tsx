@@ -8,6 +8,8 @@ interface BetSliderProps {
   minBet: number;
   maxBet: number;
   currentBet: number;
+  smallBlind?: number;
+  facingBet?: boolean;
   onBet: (amount: number) => void;
   onCancel: () => void;
 }
@@ -16,17 +18,28 @@ export function BetSlider({
   minBet,
   maxBet,
   currentBet,
+  smallBlind = 10,
+  facingBet = true,
   onBet,
   onCancel,
 }: BetSliderProps) {
   const [amount, setAmount] = useState(minBet);
 
-  const presetAmounts = [
-    { label: "Min", value: minBet },
-    { label: "1/2 Pot", value: Math.floor(currentBet / 2) || minBet },
-    { label: "Pot", value: currentBet || minBet },
-    { label: "All In", value: maxBet },
-  ];
+  // When facing a bet (post-flop), use 33%, 50%, 100%, ALL IN
+  // Otherwise use Min, 1/2 Pot, Pot, All In
+  const presetAmounts = facingBet
+    ? [
+        { label: "33%", value: Math.max(Math.floor(currentBet * 0.33), minBet) },
+        { label: "50%", value: Math.max(Math.floor(currentBet * 0.5), minBet) },
+        { label: "100%", value: Math.max(currentBet, minBet) },
+        { label: "All In", value: maxBet },
+      ]
+    : [
+        { label: "Min", value: minBet },
+        { label: "1/2 Pot", value: Math.max(Math.floor(currentBet / 2), minBet) },
+        { label: "Pot", value: Math.max(currentBet, minBet) },
+        { label: "All In", value: maxBet },
+      ];
 
   return (
     <div className="bg-gray-900 rounded-lg p-4 space-y-4 w-full max-w-md mx-auto">
@@ -50,6 +63,7 @@ export function BetSlider({
           type="range"
           min={minBet}
           max={maxBet}
+          step={smallBlind}
           value={amount}
           onChange={(e) => setAmount(Number(e.target.value))}
           className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
@@ -60,12 +74,15 @@ export function BetSlider({
           onChange={(e) => {
             const val = Number(e.target.value);
             if (val >= minBet && val <= maxBet) {
-              setAmount(val);
+              // Round to nearest small blind
+              const rounded = Math.round(val / smallBlind) * smallBlind;
+              setAmount(Math.max(minBet, Math.min(rounded, maxBet)));
             }
           }}
           className="w-20 text-center"
           min={minBet}
           max={maxBet}
+          step={smallBlind}
         />
       </div>
 

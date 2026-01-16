@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { getSessionId } from "@/lib/session";
 
+function subscribe(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getSnapshot() {
+  return getSessionId();
+}
+
+function getServerSnapshot() {
+  return null;
+}
+
 export function useSession() {
-  const [sessionId, setSessionId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSessionId(getSessionId());
-  }, []);
-
-  return sessionId;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

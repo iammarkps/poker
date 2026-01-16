@@ -1,15 +1,75 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/components/game/game-provider";
 import { PokerTable } from "@/components/poker/table";
 import { ActionButtons } from "@/components/poker/action-buttons";
 import { Button } from "@/components/ui/button";
 import { evaluateHand, HAND_NAMES } from "@/lib/poker/hand-evaluator";
+import { SessionTimer } from "@/components/poker/session-timer";
+import { AddonPanel } from "@/components/poker/addon-panel";
 
 export function PokerGame() {
   const { room, hand, players, playerHands, isHost, sessionId, refetch } = useGame();
   const [isStarting, setIsStarting] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const autoNextHandRef = useRef(false);
+
+  const isShowdown = hand?.phase === "showdown";
+
+  // Auto next hand after 3 seconds at showdown (host only)
+  useEffect(() => {
+    if (!isShowdown || !isHost || isStarting || autoNextHandRef.current) {
+      return;
+    }
+
+    autoNextHandRef.current = true;
+    setCountdown(3);
+
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    countdownRef.current = setTimeout(async () => {
+      if (!room) return;
+      setIsStarting(true);
+      try {
+        await fetch(`/api/room/${room.code}/next-hand`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+        refetch();
+      } catch (error) {
+        console.error("Failed to start next hand:", error);
+      } finally {
+        setIsStarting(false);
+        autoNextHandRef.current = false;
+      }
+    }, 3000);
+
+    return () => {
+      clearInterval(interval);
+      if (countdownRef.current) {
+        clearTimeout(countdownRef.current);
+      }
+    };
+  }, [isShowdown, isHost, isStarting, room, sessionId, refetch]);
+
+  // Reset autoNextHandRef when leaving showdown
+  useEffect(() => {
+    if (!isShowdown) {
+      autoNextHandRef.current = false;
+      setCountdown(null);
+    }
+  }, [isShowdown]);
 
   if (!room || !hand) {
     return (
@@ -17,24 +77,6 @@ export function PokerGame() {
         <p className="text-white">Loading game...</p>
       </main>
     );
-  }
-
-  const isShowdown = hand.phase === "showdown";
-
-  async function startNextHand() {
-    setIsStarting(true);
-    try {
-      await fetch(`/api/room/${room!.code}/next-hand`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
-      });
-      refetch();
-    } catch (error) {
-      console.error("Failed to start next hand:", error);
-    } finally {
-      setIsStarting(false);
-    }
   }
 
   // Get winner info for showdown display
@@ -88,7 +130,15 @@ export function PokerGame() {
   const winnerInfo = getWinnerInfo();
 
   return (
-    <main className="min-h-screen flex flex-col bg-gradient-to-b from-green-900 to-green-950">
+    <main className="min-h-screen flex flex-col bg-gradient-to-b from-green-900 to-green-950 relative">
+      {/* Add-on panel at top left */}
+      <AddonPanel />
+
+      {/* Session timer at top right */}
+      <div className="absolute top-4 right-4 z-10">
+        <SessionTimer />
+      </div>
+
       <div className="flex-1 flex items-center justify-center p-4">
         <PokerTable />
       </div>
@@ -104,20 +154,13 @@ export function PokerGame() {
                 {w.player.name} - {w.handName}
               </p>
             ))}
-            {isHost && (
-              <Button
-                className="mt-4"
-                onClick={startNextHand}
-                disabled={isStarting}
-              >
-                {isStarting ? "Starting..." : "Deal Next Hand"}
-              </Button>
-            )}
-            {!isHost && (
-              <p className="text-white/60 text-sm mt-2">
-                Waiting for host to deal next hand...
-              </p>
-            )}
+            <p className="text-white/60 text-sm mt-2">
+              {isStarting
+                ? "Dealing..."
+                : countdown !== null
+                ? `Next hand in ${countdown}s...`
+                : "Preparing next hand..."}
+            </p>
           </div>
         </div>
       )}

@@ -115,6 +115,7 @@ export async function POST(
     // Process action
     let newPot = hand.pot;
     let newCurrentBet = hand.current_bet;
+    let newLastRaise = hand.last_raise;
     let playerChips = currentPlayer.chips;
     let playerBet = myPlayerHand.current_bet;
     let isFolded = false;
@@ -143,9 +144,11 @@ export async function POST(
           return NextResponse.json({ error: "Raise amount required" }, { status: 400 });
         }
         const raiseAmount = amount - myPlayerHand.current_bet;
+        const raiseIncrement = amount - hand.current_bet;
         playerChips -= raiseAmount;
         playerBet = amount;
         newPot += raiseAmount;
+        newLastRaise = raiseIncrement;
         newCurrentBet = amount;
         if (playerChips === 0) isAllIn = true;
         break;
@@ -156,6 +159,10 @@ export async function POST(
         newPot += allInAmount;
         playerBet += allInAmount;
         if (playerBet > newCurrentBet) {
+          const raiseIncrement = playerBet - newCurrentBet;
+          if (raiseIncrement > 0) {
+            newLastRaise = raiseIncrement;
+          }
           newCurrentBet = playerBet;
         }
         playerChips = 0;
@@ -255,6 +262,8 @@ export async function POST(
             pot: newPot,
             current_bet: newCurrentBet,
             current_seat: nextSeat,
+            last_raise: newLastRaise,
+            turn_start_time: new Date().toISOString(),
           })
           .eq("id", hand.id);
 
@@ -338,6 +347,8 @@ export async function POST(
           deck,
           phase: nextPhase,
           current_seat: firstToAct,
+          last_raise: room.big_blind,
+          turn_start_time: new Date().toISOString(),
         })
         .eq("id", hand.id);
 
@@ -353,6 +364,8 @@ export async function POST(
         pot: newPot,
         current_bet: newCurrentBet,
         current_seat: nextSeat,
+        last_raise: newLastRaise,
+        turn_start_time: new Date().toISOString(),
       })
       .eq("id", hand.id);
 

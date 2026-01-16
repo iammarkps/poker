@@ -12,6 +12,7 @@ interface SeatProps {
   isDealer: boolean;
   isMe: boolean;
   showCards: boolean;
+  isWinner?: boolean;
 }
 
 export function Seat({
@@ -22,6 +23,7 @@ export function Seat({
   isDealer,
   isMe,
   showCards,
+  isWinner,
 }: SeatProps) {
   if (!player) {
     return (
@@ -39,7 +41,8 @@ export function Seat({
     <div
       className={cn(
         "relative w-24 flex flex-col items-center gap-1",
-        isFolded && "opacity-50"
+        isFolded && "opacity-50",
+        isWinner && "animate-pulse"
       )}
     >
       {/* Bet amount */}
@@ -70,8 +73,10 @@ export function Seat({
           "w-full rounded-lg p-2 text-center transition-all",
           isCurrentTurn
             ? "bg-yellow-500 text-black ring-2 ring-yellow-300"
+            : isWinner
+            ? "bg-green-500 text-white ring-2 ring-green-300"
             : "bg-gray-800 text-white",
-          isMe && !isCurrentTurn && "ring-2 ring-blue-500"
+          isMe && !isCurrentTurn && !isWinner && "ring-2 ring-blue-500"
         )}
       >
         <div className="flex items-center justify-center gap-1">
@@ -85,8 +90,11 @@ export function Seat({
           </span>
         </div>
         <div className="text-xs opacity-80">{player.chips}</div>
-        {isAllIn && (
+        {isAllIn && !isWinner && (
           <div className="text-xs text-red-400 font-bold">ALL IN</div>
+        )}
+        {isWinner && (
+          <div className="text-xs text-yellow-300 font-bold">WINNER</div>
         )}
       </div>
     </div>
