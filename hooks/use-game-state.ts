@@ -30,7 +30,7 @@ export function useGameState(roomCode: string, sessionId: string | null) {
   const fetchGameState = useCallback(async () => {
     if (!sessionId) return;
 
-    const supabase = createClient();
+    const supabase = createClient({ "x-room-code": roomCode });
 
     // Fetch room
     const { data: room, error: roomError } = await supabase
@@ -105,7 +105,7 @@ export function useGameState(roomCode: string, sessionId: string | null) {
 
     if (!sessionId) return;
 
-    const supabase = createClient();
+    const supabase = createClient({ "x-room-code": roomCode });
 
     const initialFetchId = setTimeout(() => {
       void fetchGameState();
@@ -137,7 +137,7 @@ export function useGameState(roomCode: string, sessionId: string | null) {
   useEffect(() => {
     if (!sessionId || !state.room?.id) return;
 
-    const supabase = createClient();
+    const supabase = createClient({ "x-room-code": roomCode });
     const roomId = state.room.id;
 
     const roomDataChannel = supabase
@@ -171,12 +171,12 @@ export function useGameState(roomCode: string, sessionId: string | null) {
     return () => {
       supabase.removeChannel(roomDataChannel);
     };
-  }, [sessionId, state.room?.id, fetchGameState]);
+  }, [sessionId, state.room?.id, fetchGameState, roomCode]);
 
   useEffect(() => {
     if (!sessionId || !state.hand?.id) return;
 
-    const supabase = createClient();
+    const supabase = createClient({ "x-room-code": roomCode });
     const handId = state.hand.id;
 
     const handChannel = supabase
@@ -198,7 +198,7 @@ export function useGameState(roomCode: string, sessionId: string | null) {
     return () => {
       supabase.removeChannel(handChannel);
     };
-  }, [sessionId, state.hand?.id, fetchGameState]);
+  }, [sessionId, state.hand?.id, fetchGameState, roomCode]);
 
   return {
     ...state,

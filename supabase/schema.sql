@@ -82,14 +82,44 @@ ALTER TABLE hands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE player_hands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE actions ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies - Allow all operations (validated in API routes)
--- Note: In production, you'd want more restrictive policies
+-- Scoped RLS Policies: service_role full access; anon read-only per room via header x-room-code
+CREATE POLICY IF NOT EXISTS "rooms_service_rw" ON rooms
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "rooms_anon_select" ON rooms
+  FOR SELECT TO anon
+  USING (code = current_setting('request.headers', true)::json->>'x-room-code');
 
-CREATE POLICY "Allow all operations on rooms" ON rooms FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all operations on players" ON players FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all operations on hands" ON hands FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all operations on player_hands" ON player_hands FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all operations on actions" ON actions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "players_service_rw" ON players
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "players_anon_select" ON players
+  FOR SELECT TO anon
+  USING (room_id IN (SELECT id FROM rooms WHERE code = current_setting('request.headers', true)::json->>'x-room-code'));
+
+CREATE POLICY IF NOT EXISTS "hands_service_rw" ON hands
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "hands_anon_select" ON hands
+  FOR SELECT TO anon
+  USING (room_id IN (SELECT id FROM rooms WHERE code = current_setting('request.headers', true)::json->>'x-room-code'));
+
+CREATE POLICY IF NOT EXISTS "player_hands_service_rw" ON player_hands
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "player_hands_anon_select" ON player_hands
+  FOR SELECT TO anon
+  USING (hand_id IN (
+    SELECT id FROM hands WHERE room_id IN (
+      SELECT id FROM rooms WHERE code = current_setting('request.headers', true)::json->>'x-room-code'
+    )
+  ));
+
+CREATE POLICY IF NOT EXISTS "actions_service_rw" ON actions
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "actions_anon_select" ON actions
+  FOR SELECT TO anon
+  USING (hand_id IN (
+    SELECT id FROM hands WHERE room_id IN (
+      SELECT id FROM rooms WHERE code = current_setting('request.headers', true)::json->>'x-room-code'
+    )
+  ));
 
 -- Enable Realtime for all tables
 ALTER PUBLICATION supabase_realtime ADD TABLE rooms;

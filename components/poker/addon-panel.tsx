@@ -27,7 +27,7 @@ export function AddonPanel() {
 
     setAmount(room.starting_chips);
 
-    const supabase = createClient();
+    const supabase = createClient({ "x-room-code": room.code });
     let isActive = true;
 
     // Fetch pending requests

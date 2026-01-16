@@ -7,7 +7,7 @@ export function usePresence(roomCode: string, sessionId: string | null, playerId
   useEffect(() => {
     if (!sessionId || !playerId) return;
 
-    const supabase = createClient();
+    const supabase = createClient({ "x-room-code": roomCode });
 
     // Update player as connected
     supabase
