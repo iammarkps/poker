@@ -106,13 +106,14 @@ export async function POST(
 
     // Every 10 hands, add 1 time bank (up to 5 max)
     if (newHandCount % 10 === 0) {
-      for (const player of players) {
+      const timeBankUpdates = players.map((player) => {
         const newTimeBank = Math.min((player.time_bank || 3) + 1, 5);
-        await supabase
+        return supabase
           .from("players")
           .update({ time_bank: newTimeBank })
           .eq("id", player.id);
-      }
+      });
+      await Promise.all(timeBankUpdates);
     }
 
     // Create new hand
@@ -175,19 +176,26 @@ export async function POST(
     }
 
     // Deduct blinds from players
+    const blindUpdates = [];
     if (smallBlindPlayer) {
-      await supabase
-        .from("players")
-        .update({ chips: smallBlindPlayer.chips - room.small_blind })
-        .eq("id", smallBlindPlayer.id);
+      blindUpdates.push(
+        supabase
+          .from("players")
+          .update({ chips: smallBlindPlayer.chips - room.small_blind })
+          .eq("id", smallBlindPlayer.id)
+      );
     }
 
     if (bigBlindPlayer) {
-      await supabase
-        .from("players")
-        .update({ chips: bigBlindPlayer.chips - room.big_blind })
-        .eq("id", bigBlindPlayer.id);
+      blindUpdates.push(
+        supabase
+          .from("players")
+          .update({ chips: bigBlindPlayer.chips - room.big_blind })
+          .eq("id", bigBlindPlayer.id)
+      );
     }
+
+    await Promise.all(blindUpdates);
 
     return NextResponse.json({ success: true, handId: hand.id });
   } catch (error) {

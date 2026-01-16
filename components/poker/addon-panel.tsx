@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useGame } from "@/components/game/game-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/client";
 
 interface AddonRequestWithName {
   id: string;
@@ -26,19 +27,44 @@ export function AddonPanel() {
 
     setAmount(room.starting_chips);
 
+    const supabase = createClient();
+    let isActive = true;
+
     // Fetch pending requests
     const fetchRequests = async () => {
       try {
-        const res = await fetch(
-          `/api/room/${room.code}/addon?sessionId=${sessionId}`
-        );
-        const data = await res.json();
-        setPendingRequests(data.requests || []);
+        const { data: requests, error } = await supabase
+          .from("addon_requests")
+          .select("*")
+          .eq("room_id", room.id)
+          .eq("status", "pending");
 
-        // Check if current player has a pending request
+        if (!isActive) return;
+
+        if (error) {
+          throw error;
+        }
+
+        const playerIds = requests?.map((r) => r.player_id) || [];
+        let playersMap = new Map<string, string>();
+
+        if (playerIds.length > 0) {
+          const { data: players } = await supabase
+            .from("players")
+            .select("id, name")
+            .in("id", playerIds);
+          playersMap = new Map((players || []).map((p) => [p.id, p.name]));
+        }
+
+        const requestsWithNames = (requests || []).map((r) => ({
+          ...r,
+          playerName: playersMap.get(r.player_id) || "Unknown",
+        }));
+
+        setPendingRequests(requestsWithNames);
         if (myPlayer) {
-          const myRequest = data.requests?.find(
-            (r: AddonRequestWithName) => r.player_id === myPlayer.id
+          const myRequest = requestsWithNames.find(
+            (r) => r.player_id === myPlayer.id
           );
           setMyPendingRequest(!!myRequest);
         }
@@ -47,9 +73,28 @@ export function AddonPanel() {
       }
     };
 
-    fetchRequests();
-    const interval = setInterval(fetchRequests, 5000);
-    return () => clearInterval(interval);
+    void fetchRequests();
+
+    const channel = supabase
+      .channel(`addon:${room.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "addon_requests",
+          filter: `room_id=eq.${room.id}`,
+        },
+        () => {
+          fetchRequests();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isActive = false;
+      supabase.removeChannel(channel);
+    };
   }, [room, sessionId, myPlayer]);
 
   if (!room || !myPlayer) return null;

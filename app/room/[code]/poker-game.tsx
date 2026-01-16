@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/components/game/game-provider";
 import { PokerTable } from "@/components/poker/table";
 import { ActionButtons } from "@/components/poker/action-buttons";
-import { Button } from "@/components/ui/button";
 import { evaluateHand, HAND_NAMES } from "@/lib/poker/hand-evaluator";
 import { SessionTimer } from "@/components/poker/session-timer";
 import { AddonPanel } from "@/components/poker/addon-panel";

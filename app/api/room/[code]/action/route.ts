@@ -211,15 +211,19 @@ export async function POST(
       // Hand is over - award pot to winner
       const winners = determineWinners(players, updatedPlayerHands || [], hand.community_cards);
 
+      const winnerUpdates = [];
       for (const winner of winners) {
         const winningPlayer = players.find((p) => p.id === winner.playerId);
-        if (winningPlayer) {
-          await supabase
+        if (!winningPlayer) continue;
+        winnerUpdates.push(
+          supabase
             .from("players")
             .update({ chips: winningPlayer.chips + winner.amount })
-            .eq("id", winner.playerId);
-        }
+            .eq("id", winner.playerId)
+        );
       }
+
+      await Promise.all(winnerUpdates);
 
       // Update hand to showdown
       await supabase
@@ -240,14 +244,17 @@ export async function POST(
     if (roundComplete) {
       // If raise happened, need to reset has_acted for other players
       if (action === "raise" || action === "all_in") {
+        const resetActions = [];
         for (const ph of updatedPlayerHands || []) {
-          if (ph.player_id !== currentPlayer.id && !ph.is_folded && !ph.is_all_in) {
-            await supabase
-              .from("player_hands")
-              .update({ has_acted: false })
-              .eq("id", ph.id);
+          if (ph.player_id === currentPlayer.id || ph.is_folded || ph.is_all_in) {
+            continue;
           }
+          resetActions.push(
+            supabase.from("player_hands").update({ has_acted: false }).eq("id", ph.id)
+          );
         }
+
+        await Promise.all(resetActions);
 
         // Find next player
         const nextSeat = findNextPlayer(
@@ -292,15 +299,19 @@ export async function POST(
 
         const winners = determineWinners(players, finalPlayerHands || [], communityCards);
 
+        const winnerUpdates = [];
         for (const winner of winners) {
           const winningPlayer = players.find((p) => p.id === winner.playerId);
-          if (winningPlayer) {
-            await supabase
+          if (!winningPlayer) continue;
+          winnerUpdates.push(
+            supabase
               .from("players")
               .update({ chips: winningPlayer.chips + winner.amount })
-              .eq("id", winner.playerId);
-          }
+              .eq("id", winner.playerId)
+          );
         }
+
+        await Promise.all(winnerUpdates);
 
         await supabase
           .from("hands")
@@ -326,14 +337,18 @@ export async function POST(
       deck = remaining;
 
       // Reset betting for new round
+      const resetBets = [];
       for (const ph of updatedPlayerHands || []) {
-        if (!ph.is_folded) {
-          await supabase
+        if (ph.is_folded) continue;
+        resetBets.push(
+          supabase
             .from("player_hands")
             .update({ has_acted: false, current_bet: 0 })
-            .eq("id", ph.id);
-        }
+            .eq("id", ph.id)
+        );
       }
+
+      await Promise.all(resetBets);
 
       // Find first player after dealer who is still active
       const firstToAct = findNextPlayer(hand.dealer_seat, players, playerHandsMap);

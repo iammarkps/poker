@@ -46,47 +46,47 @@ export function useGameState(roomCode: string, sessionId: string | null) {
       return;
     }
 
-    // Fetch players
-    const { data: players } = await supabase
+    const playersPromise = supabase
       .from("players")
       .select("*")
       .eq("room_id", room.id)
       .order("seat");
+
+    const handPromise =
+      room.status === "playing"
+        ? supabase
+            .from("hands")
+            .select("*")
+            .eq("room_id", room.id)
+            .order("version", { ascending: false })
+            .limit(1)
+            .single()
+        : Promise.resolve({ data: null as Hand | null });
+
+    const [{ data: players }, { data: handData }] = await Promise.all([
+      playersPromise,
+      handPromise,
+    ]);
 
     if (!isMounted.current) return;
 
     // Find my player
     const myPlayer = players?.find((p) => p.session_id === sessionId);
 
-    // Fetch current hand if game is playing
-    let hand: Hand | null = null;
+    const hand: Hand | null = handData ?? null;
     let playerHands: PlayerHand[] = [];
     let myPlayerHand: PlayerHand | null = null;
 
-    if (room.status === "playing") {
-      const { data: handData } = await supabase
-        .from("hands")
+    if (hand) {
+      const { data: playerHandsData } = await supabase
+        .from("player_hands")
         .select("*")
-        .eq("room_id", room.id)
-        .order("version", { ascending: false })
-        .limit(1)
-        .single();
+        .eq("hand_id", hand.id);
 
       if (!isMounted.current) return;
 
-      hand = handData;
-
-      if (hand) {
-        const { data: playerHandsData } = await supabase
-          .from("player_hands")
-          .select("*")
-          .eq("hand_id", hand.id);
-
-        if (!isMounted.current) return;
-
-        playerHands = playerHandsData || [];
-        myPlayerHand = playerHands.find((ph) => ph.player_id === myPlayer?.id) || null;
-      }
+      playerHands = playerHandsData || [];
+      myPlayerHand = playerHands.find((ph) => ph.player_id === myPlayer?.id) || null;
     }
 
     setState({
@@ -107,13 +107,10 @@ export function useGameState(roomCode: string, sessionId: string | null) {
 
     const supabase = createClient();
 
-    // Initial fetch - wrapped in async IIFE to handle the promise
-    const initFetch = async () => {
-      await fetchGameState();
-    };
-    initFetch();
+    const initialFetchId = setTimeout(() => {
+      void fetchGameState();
+    }, 0);
 
-    // Subscribe to room changes
     const roomChannel = supabase
       .channel(`room:${roomCode}`)
       .on(
@@ -128,12 +125,30 @@ export function useGameState(roomCode: string, sessionId: string | null) {
           fetchGameState();
         }
       )
+      .subscribe();
+
+    return () => {
+      isMounted.current = false;
+      clearTimeout(initialFetchId);
+      supabase.removeChannel(roomChannel);
+    };
+  }, [roomCode, sessionId, fetchGameState]);
+
+  useEffect(() => {
+    if (!sessionId || !state.room?.id) return;
+
+    const supabase = createClient();
+    const roomId = state.room.id;
+
+    const roomDataChannel = supabase
+      .channel(`room-data:${roomId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "players",
+          filter: `room_id=eq.${roomId}`,
         },
         () => {
           fetchGameState();
@@ -145,17 +160,7 @@ export function useGameState(roomCode: string, sessionId: string | null) {
           event: "*",
           schema: "public",
           table: "hands",
-        },
-        () => {
-          fetchGameState();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "player_hands",
+          filter: `room_id=eq.${roomId}`,
         },
         () => {
           fetchGameState();
@@ -164,10 +169,36 @@ export function useGameState(roomCode: string, sessionId: string | null) {
       .subscribe();
 
     return () => {
-      isMounted.current = false;
-      supabase.removeChannel(roomChannel);
+      supabase.removeChannel(roomDataChannel);
     };
-  }, [roomCode, sessionId, fetchGameState]);
+  }, [sessionId, state.room?.id, fetchGameState]);
+
+  useEffect(() => {
+    if (!sessionId || !state.hand?.id) return;
+
+    const supabase = createClient();
+    const handId = state.hand.id;
+
+    const handChannel = supabase
+      .channel(`hand:${handId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "player_hands",
+          filter: `hand_id=eq.${handId}`,
+        },
+        () => {
+          fetchGameState();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(handChannel);
+    };
+  }, [sessionId, state.hand?.id, fetchGameState]);
 
   return {
     ...state,

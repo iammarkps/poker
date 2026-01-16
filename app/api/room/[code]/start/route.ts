@@ -162,19 +162,26 @@ export async function POST(
     const smallBlindPlayer = players.find((p) => p.seat === smallBlindSeat);
     const bigBlindPlayer = players.find((p) => p.seat === bigBlindSeat);
 
+    const blindUpdates = [];
     if (smallBlindPlayer) {
-      await supabase
-        .from("players")
-        .update({ chips: smallBlindPlayer.chips - room.small_blind })
-        .eq("id", smallBlindPlayer.id);
+      blindUpdates.push(
+        supabase
+          .from("players")
+          .update({ chips: smallBlindPlayer.chips - room.small_blind })
+          .eq("id", smallBlindPlayer.id)
+      );
     }
 
     if (bigBlindPlayer) {
-      await supabase
-        .from("players")
-        .update({ chips: bigBlindPlayer.chips - room.big_blind })
-        .eq("id", bigBlindPlayer.id);
+      blindUpdates.push(
+        supabase
+          .from("players")
+          .update({ chips: bigBlindPlayer.chips - room.big_blind })
+          .eq("id", bigBlindPlayer.id)
+      );
     }
+
+    await Promise.all(blindUpdates);
 
     return NextResponse.json({ success: true, handId: hand.id });
   } catch (error) {

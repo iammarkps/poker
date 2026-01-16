@@ -20,9 +20,11 @@ export function TurnTimer({ onTimeout }: TurnTimerProps) {
 
   useEffect(() => {
     if (!isMyTurn || !hand || hand.phase === "showdown") {
-      setTimeLeft(TURN_TIME);
-      setUsingTimeBank(false);
-      return;
+      const resetId = setTimeout(() => {
+        setTimeLeft(TURN_TIME);
+        setUsingTimeBank(false);
+      }, 0);
+      return () => clearTimeout(resetId);
     }
 
     const turnStart = hand.turn_start_time
