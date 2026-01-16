@@ -157,6 +157,7 @@ export async function POST(
         player_id: player.id,
         hole_cards: playerHoleCards.get(player.id) || [],
         current_bet: blindAmount,
+        total_contributed: blindAmount,
         has_acted: false,
         is_folded: false,
         is_all_in: false,

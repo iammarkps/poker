@@ -118,6 +118,7 @@ export async function POST(
     let newLastRaise = hand.last_raise;
     let playerChips = currentPlayer.chips;
     let playerBet = myPlayerHand.current_bet;
+    let playerContribution = myPlayerHand.total_contributed ?? myPlayerHand.current_bet;
     let isFolded = false;
     let isAllIn = false;
 
@@ -134,6 +135,7 @@ export async function POST(
         const toCall = Math.min(hand.current_bet - myPlayerHand.current_bet, playerChips);
         playerChips -= toCall;
         playerBet += toCall;
+        playerContribution += toCall;
         newPot += toCall;
         if (playerChips === 0) isAllIn = true;
         break;
@@ -147,6 +149,7 @@ export async function POST(
         const raiseIncrement = amount - hand.current_bet;
         playerChips -= raiseAmount;
         playerBet = amount;
+        playerContribution += raiseAmount;
         newPot += raiseAmount;
         newLastRaise = raiseIncrement;
         newCurrentBet = amount;
@@ -158,6 +161,7 @@ export async function POST(
         const allInAmount = playerChips;
         newPot += allInAmount;
         playerBet += allInAmount;
+        playerContribution += allInAmount;
         if (playerBet > newCurrentBet) {
           const raiseIncrement = playerBet - newCurrentBet;
           if (raiseIncrement > 0) {
@@ -176,6 +180,7 @@ export async function POST(
       .from("player_hands")
       .update({
         current_bet: playerBet,
+        total_contributed: playerContribution,
         has_acted: true,
         is_folded: isFolded,
         is_all_in: isAllIn,

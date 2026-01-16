@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS player_hands (
   player_id UUID REFERENCES players(id) ON DELETE CASCADE,
   hole_cards TEXT[] DEFAULT '{}',
   current_bet INTEGER DEFAULT 0,
+  total_contributed INTEGER DEFAULT 0,
   has_acted BOOLEAN DEFAULT false,
   is_folded BOOLEAN DEFAULT false,
   is_all_in BOOLEAN DEFAULT false,

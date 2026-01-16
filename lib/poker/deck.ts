@@ -13,9 +13,19 @@ export function createDeck(): string[] {
 
 export function shuffleDeck(deck: string[]): string[] {
   const shuffled = [...deck];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  const cryptoObj = typeof crypto !== "undefined" ? crypto : undefined;
+
+  if (cryptoObj?.getRandomValues) {
+    const randomBytes = cryptoObj.getRandomValues(new Uint32Array(shuffled.length));
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = randomBytes[i] % (i + 1);
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+  } else {
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
   }
   return shuffled;
 }

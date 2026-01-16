@@ -130,6 +130,7 @@ export type Database = {
           player_id: string;
           hole_cards: string[];
           current_bet: number;
+          total_contributed: number;
           has_acted: boolean;
           is_folded: boolean;
           is_all_in: boolean;
@@ -140,6 +141,7 @@ export type Database = {
           player_id: string;
           hole_cards?: string[];
           current_bet?: number;
+          total_contributed?: number;
           has_acted?: boolean;
           is_folded?: boolean;
           is_all_in?: boolean;
@@ -150,6 +152,7 @@ export type Database = {
           player_id?: string;
           hole_cards?: string[];
           current_bet?: number;
+          total_contributed?: number;
           has_acted?: boolean;
           is_folded?: boolean;
           is_all_in?: boolean;

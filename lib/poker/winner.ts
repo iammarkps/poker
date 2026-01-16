@@ -40,13 +40,15 @@ export function determineWinners(
       player,
       playerHand,
       evaluatedHand,
-      contribution: playerHand.current_bet,
+      contribution: playerHand.total_contributed ?? playerHand.current_bet,
     };
   });
 
   // Handle side pots
   const results: WinnerResult[] = [];
-  const allContributions = playerHands.map((ph) => ph.current_bet);
+  const allContributions = playerHands.map(
+    (ph) => ph.total_contributed ?? ph.current_bet
+  );
   const uniqueContributions = [...new Set(allContributions)].sort((a, b) => a - b);
 
   let previousLevel = 0;
