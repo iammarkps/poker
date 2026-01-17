@@ -54,7 +54,7 @@ export function TurnTimer({ onTimeout }: TurnTimerProps) {
         setUsingTimeBank(false);
         setTimeLeft(remaining);
       }
-    }, 100);
+    }, 250);
 
     return () => clearInterval(interval);
   }, [isMyTurn, hand, myPlayer?.time_bank, handleTimeout]);

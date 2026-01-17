@@ -4,7 +4,6 @@ import { useGame } from "@/components/game/game-provider";
 import { Seat } from "./seat";
 import { CommunityCards } from "./community-cards";
 import { PotDisplay } from "./pot-display";
-import { evaluateHand } from "@/lib/poker/hand-evaluator";
 
 // Seat positions around an oval table (9 seats)
 // Positions are percentages from center
@@ -21,7 +20,7 @@ const SEAT_POSITIONS = [
 ];
 
 export function PokerTable() {
-  const { players, hand, playerHands, myPlayer, myPlayerHand } = useGame();
+  const { players, hand, playerHands, myPlayer, myPlayerHand, winnerPlayerIds } = useGame();
 
   if (!hand) return null;
 
@@ -34,57 +33,6 @@ export function PokerTable() {
   const reorderedSeats = Array.from({ length: 9 }, (_, i) => (i + mySeat) % 9);
 
   const showdownPhase = hand.phase === "showdown";
-
-  // Calculate winners at showdown to only show winning cards
-  const winnerPlayerIds = new Set<string>();
-  if (showdownPhase) {
-    const activePlayers = players.filter((p) => {
-      const ph = playerToHand.get(p.id);
-      return ph && !ph.is_folded;
-    });
-
-    // If only one player remains, they're the winner (no cards shown)
-    if (activePlayers.length === 1) {
-      winnerPlayerIds.add(activePlayers[0].id);
-    } else if (activePlayers.length > 1) {
-      // Evaluate hands and find winner(s)
-      const evaluated = activePlayers.map((player) => {
-        const ph = playerToHand.get(player.id);
-        const evalHand = ph ? evaluateHand(ph.hole_cards, hand.community_cards) : null;
-        return { player, hand: evalHand };
-      });
-
-      const sorted = evaluated
-        .filter((e) => e.hand)
-        .sort((a, b) => {
-          if (!a.hand || !b.hand) return 0;
-          if (a.hand.rank !== b.hand.rank) return b.hand.rank - a.hand.rank;
-          for (let i = 0; i < Math.min(a.hand.values.length, b.hand.values.length); i++) {
-            if (a.hand.values[i] !== b.hand.values[i]) {
-              return b.hand.values[i] - a.hand.values[i];
-            }
-          }
-          return 0;
-        });
-
-      // All players with the same winning hand are winners
-      sorted.forEach((e) => {
-        if (e.hand && sorted[0].hand && e.hand.rank === sorted[0].hand.rank) {
-          // Check kickers too
-          let isWinner = true;
-          for (let i = 0; i < Math.min(e.hand.values.length, sorted[0].hand.values.length); i++) {
-            if (e.hand.values[i] !== sorted[0].hand.values[i]) {
-              isWinner = false;
-              break;
-            }
-          }
-          if (isWinner) {
-            winnerPlayerIds.add(e.player.id);
-          }
-        }
-      });
-    }
-  }
 
   return (
     <div className="relative w-full max-w-4xl aspect-[16/10]">

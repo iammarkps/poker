@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { PlayingCard } from "./playing-card";
 import type { Player, PlayerHand } from "@/lib/supabase/types";
@@ -15,7 +16,7 @@ interface SeatProps {
   isWinner?: boolean;
 }
 
-export function Seat({
+export const Seat = memo(function Seat({
   player,
   playerHand,
   holeCards,
@@ -99,4 +100,4 @@ export function Seat({
       </div>
     </div>
   );
-}
+});

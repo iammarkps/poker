@@ -1,21 +1,42 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useGame } from "@/components/game/game-provider";
 import { PokerTable } from "@/components/poker/table";
 import { ActionButtons } from "@/components/poker/action-buttons";
-import { evaluateHand, HAND_NAMES } from "@/lib/poker/hand-evaluator";
+import { HAND_NAMES, type HandRank } from "@/lib/poker/hand-evaluator";
 import { SessionTimer } from "@/components/poker/session-timer";
 import { AddonPanel } from "@/components/poker/addon-panel";
 
 export function PokerGame() {
-  const { room, hand, players, playerHands, isHost, sessionId, refetch } = useGame();
+  const { room, hand, players, isHost, sessionId, refetch, winnerInfo: contextWinnerInfo } = useGame();
   const [isStarting, setIsStarting] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const autoNextHandRef = useRef(false);
 
   const isShowdown = hand?.phase === "showdown";
+
+  // Memoize winner display info based on context data (must be before early return)
+  const winnerInfo = useMemo(() => {
+    if (!isShowdown || !contextWinnerInfo) return null;
+
+    const winners = contextWinnerInfo.winners
+      .map((w) => {
+        const player = players.find((p) => p.id === w.playerId);
+        if (!player) return null;
+        return {
+          player,
+          handName: w.handRank !== undefined ? HAND_NAMES[w.handRank as HandRank] : w.handName || "",
+        };
+      })
+      .filter((w): w is { player: typeof players[number]; handName: string } => w !== null);
+
+    return {
+      type: contextWinnerInfo.type,
+      winners,
+    };
+  }, [isShowdown, contextWinnerInfo, players]);
 
   // Auto next hand after 3 seconds at showdown (host only)
   useEffect(() => {
@@ -77,56 +98,6 @@ export function PokerGame() {
       </main>
     );
   }
-
-  // Get winner info for showdown display
-  const getWinnerInfo = () => {
-    if (!isShowdown) return null;
-
-    const activePlayers = players.filter((p) => {
-      const ph = playerHands.find((h) => h.player_id === p.id);
-      return ph && !ph.is_folded;
-    });
-
-    if (activePlayers.length === 1) {
-      return {
-        type: "fold",
-        winners: [{ player: activePlayers[0], handName: "Everyone else folded" }],
-      };
-    }
-
-    const evaluated = activePlayers.map((player) => {
-      const ph = playerHands.find((h) => h.player_id === player.id);
-      const evalHand = ph ? evaluateHand(ph.hole_cards, hand.community_cards) : null;
-      return { player, hand: evalHand };
-    });
-
-    const sorted = evaluated
-      .filter((e) => e.hand)
-      .sort((a, b) => {
-        if (!a.hand || !b.hand) return 0;
-        if (a.hand.rank !== b.hand.rank) return b.hand.rank - a.hand.rank;
-        for (let i = 0; i < Math.min(a.hand.values.length, b.hand.values.length); i++) {
-          if (a.hand.values[i] !== b.hand.values[i]) {
-            return b.hand.values[i] - a.hand.values[i];
-          }
-        }
-        return 0;
-      });
-
-    const winners = sorted.filter(
-      (e) => e.hand && sorted[0].hand && e.hand.rank === sorted[0].hand.rank
-    );
-
-    return {
-      type: "showdown",
-      winners: winners.map((w) => ({
-        player: w.player,
-        handName: w.hand ? HAND_NAMES[w.hand.rank] : "",
-      })),
-    };
-  };
-
-  const winnerInfo = getWinnerInfo();
 
   return (
     <main className="min-h-screen flex flex-col bg-gradient-to-b from-green-900 to-green-950 relative">

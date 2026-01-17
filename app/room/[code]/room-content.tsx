@@ -1,9 +1,13 @@
 "use client";
 
+import { lazy, Suspense } from "react";
 import Link from "next/link";
 import { useGame } from "@/components/game/game-provider";
 import { Lobby } from "./lobby";
-import { PokerGame } from "./poker-game";
+
+const PokerGame = lazy(() =>
+  import("./poker-game").then((mod) => ({ default: mod.PokerGame }))
+);
 
 export function RoomContent() {
   const { room, isLoading, error } = useGame();
@@ -33,5 +37,15 @@ export function RoomContent() {
     return <Lobby />;
   }
 
-  return <PokerGame />;
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-900 to-green-950">
+          <p className="text-white text-lg">Loading game...</p>
+        </main>
+      }
+    >
+      <PokerGame />
+    </Suspense>
+  );
 }
