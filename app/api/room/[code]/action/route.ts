@@ -216,14 +216,21 @@ export async function POST(
       // Hand is over - award pot to winner
       const winners = determineWinners(players, updatedPlayerHands || [], hand.community_cards);
 
+      // Fetch fresh player data to get current chip counts (after this action's deductions)
+      const { data: freshPlayers } = await supabase
+        .from("players")
+        .select("id, chips")
+        .eq("room_id", room.id);
+
+      const freshPlayerMap = new Map(freshPlayers?.map((p) => [p.id, p.chips]) || []);
+
       const winnerUpdates = [];
       for (const winner of winners) {
-        const winningPlayer = players.find((p) => p.id === winner.playerId);
-        if (!winningPlayer) continue;
+        const currentChips = freshPlayerMap.get(winner.playerId) ?? 0;
         winnerUpdates.push(
           supabase
             .from("players")
-            .update({ chips: winningPlayer.chips + winner.amount })
+            .update({ chips: currentChips + winner.amount })
             .eq("id", winner.playerId)
         );
       }
@@ -304,14 +311,21 @@ export async function POST(
 
         const winners = determineWinners(players, finalPlayerHands || [], communityCards);
 
+        // Fetch fresh player data to get current chip counts
+        const { data: freshPlayers } = await supabase
+          .from("players")
+          .select("id, chips")
+          .eq("room_id", room.id);
+
+        const freshPlayerMap = new Map(freshPlayers?.map((p) => [p.id, p.chips]) || []);
+
         const winnerUpdates = [];
         for (const winner of winners) {
-          const winningPlayer = players.find((p) => p.id === winner.playerId);
-          if (!winningPlayer) continue;
+          const currentChips = freshPlayerMap.get(winner.playerId) ?? 0;
           winnerUpdates.push(
             supabase
               .from("players")
-              .update({ chips: winningPlayer.chips + winner.amount })
+              .update({ chips: currentChips + winner.amount })
               .eq("id", winner.playerId)
           );
         }

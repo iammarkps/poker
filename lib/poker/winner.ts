@@ -28,7 +28,11 @@ export function determineWinners(
   // If only one player left, they win the entire pot
   if (activePlayers.length === 1) {
     const winner = activePlayers[0];
-    const totalPot = playerHands.reduce((sum, ph) => sum + ph.current_bet, 0);
+    // Use total_contributed to get full pot (all rounds), not just current_bet
+    const totalPot = playerHands.reduce(
+      (sum, ph) => sum + (ph.total_contributed ?? ph.current_bet),
+      0
+    );
     return [{ playerId: winner.id, amount: totalPot }];
   }
 
@@ -59,7 +63,10 @@ export function determineWinners(
     // Calculate pot for this level
     const levelDiff = level - previousLevel;
     const eligiblePlayers = playersWithHands.filter((p) => p.contribution >= level);
-    const contributorsAtLevel = playerHands.filter((ph) => ph.current_bet >= previousLevel);
+    // Use total_contributed for all players (including folded) who contributed at this level
+    const contributorsAtLevel = playerHands.filter(
+      (ph) => (ph.total_contributed ?? ph.current_bet) >= previousLevel
+    );
 
     const potForLevel = levelDiff * contributorsAtLevel.length;
 
