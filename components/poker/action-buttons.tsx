@@ -5,17 +5,139 @@ import { useGame } from "@/components/game/game-provider";
 import { Button } from "@/components/ui/button";
 import { BetSlider } from "./bet-slider";
 import { TurnTimer } from "./turn-timer";
+import type { ActionType } from "@/lib/poker/game-rules";
 
 export function ActionButtons() {
-  const { room, hand, myPlayer, myPlayerHand, isMyTurn, sessionId } = useGame();
+  const {
+    room,
+    hand,
+    myPlayer,
+    myPlayerHand,
+    isMyTurn,
+    sessionId,
+    refetch,
+    mutate,
+  } = useGame();
   const [showRaiseSlider, setShowRaiseSlider] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const applyOptimisticAction = useCallback(
+    (action: ActionType, amount?: number) => {
+      if (!room || !hand || !myPlayer || !myPlayerHand) return;
+
+      const playerId = myPlayer.id;
+      const bigBlind = room.big_blind;
+
+      mutate((prev) => {
+        if (!prev.hand) return prev;
+        const prevPlayer = prev.players.find((p) => p.id === playerId);
+        const prevHand = prev.playerHands.find((ph) => ph.player_id === playerId);
+        if (!prevPlayer || !prevHand) return prev;
+
+        const currentBet = prev.hand.current_bet;
+        const lastRaise = prev.hand.last_raise || bigBlind;
+        const myBet = prevHand.current_bet;
+        const chips = prevPlayer.chips;
+        const contributed = prevHand.total_contributed ?? prevHand.current_bet;
+
+        let newPot = prev.hand.pot;
+        let newCurrentBet = currentBet;
+        let newLastRaise = prev.hand.last_raise;
+        let newChips = chips;
+        let newPlayerBet = myBet;
+        let newContribution = contributed;
+        let isFolded = prevHand.is_folded;
+        let isAllIn = prevHand.is_all_in;
+        const hasActed = true;
+
+        switch (action) {
+          case "fold":
+            isFolded = true;
+            break;
+          case "check":
+            break;
+          case "call": {
+            if (amount === undefined) return prev;
+            const toCall = Math.min(amount, chips);
+            newChips -= toCall;
+            newPlayerBet += toCall;
+            newContribution += toCall;
+            newPot += toCall;
+            if (newChips === 0) isAllIn = true;
+            break;
+          }
+          case "raise": {
+            if (amount === undefined) return prev;
+            const raiseAmount = amount - myBet;
+            if (raiseAmount < 0) return prev;
+            newChips -= raiseAmount;
+            newPlayerBet = amount;
+            newContribution += raiseAmount;
+            newPot += raiseAmount;
+            newLastRaise = amount - currentBet;
+            newCurrentBet = amount;
+            if (newChips === 0) isAllIn = true;
+            break;
+          }
+          case "all_in": {
+            const allInAmount = chips;
+            newPot += allInAmount;
+            newPlayerBet += allInAmount;
+            newContribution += allInAmount;
+            if (newPlayerBet > newCurrentBet) {
+              const raiseIncrement = newPlayerBet - newCurrentBet;
+              if (raiseIncrement > 0) {
+                newLastRaise = raiseIncrement;
+              }
+              newCurrentBet = newPlayerBet;
+            }
+            newChips = 0;
+            isAllIn = true;
+            break;
+          }
+        }
+
+        const nextPlayers = prev.players.map((p) =>
+          p.id === playerId ? { ...p, chips: newChips } : p
+        );
+        const nextPlayerHands = prev.playerHands.map((ph) =>
+          ph.player_id === playerId
+            ? {
+                ...ph,
+                current_bet: newPlayerBet,
+                total_contributed: newContribution,
+                has_acted: hasActed,
+                is_folded: isFolded,
+                is_all_in: isAllIn,
+              }
+            : ph
+        );
+        const nextMyPlayerHand =
+          nextPlayerHands.find((ph) => ph.player_id === playerId) || null;
+
+        return {
+          ...prev,
+          hand: {
+            ...prev.hand,
+            pot: newPot,
+            current_bet: newCurrentBet,
+            last_raise: newLastRaise ?? lastRaise,
+          },
+          players: nextPlayers,
+          playerHands: nextPlayerHands,
+          myPlayerHand: nextMyPlayerHand,
+        };
+      });
+    },
+    [hand, myPlayer, myPlayerHand, mutate, room]
+  );
 
   const handleTimeout = useCallback(async () => {
     if (!room || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await fetch(`/api/room/${room.code}/action`, {
+      applyOptimisticAction("fold");
+      const res = await fetch(`/api/room/${room.code}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -23,12 +145,18 @@ export function ActionButtons() {
           action: "fold",
         }),
       });
+      if (!res.ok) {
+        await refetch();
+        return;
+      }
+      void refetch();
     } catch (error) {
       console.error("Auto-fold error:", error);
+      await refetch();
     } finally {
       setIsSubmitting(false);
     }
-  }, [room, sessionId, isSubmitting]);
+  }, [applyOptimisticAction, room, sessionId, isSubmitting, refetch]);
 
   if (!room || !hand || !myPlayer || !myPlayerHand) {
     return null;
@@ -56,12 +184,13 @@ export function ActionButtons() {
   const maxBet = myPlayer.chips;
   const maxRaise = myPlayer.chips + myBet; // Total bet amount when going all-in
 
-  async function submitAction(action: string, amount?: number) {
+  async function submitAction(action: ActionType, amount?: number) {
     setIsSubmitting(true);
     setShowRaiseSlider(false);
 
     try {
-      await fetch(`/api/room/${room!.code}/action`, {
+      applyOptimisticAction(action, amount);
+      const res = await fetch(`/api/room/${room!.code}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -70,8 +199,14 @@ export function ActionButtons() {
           amount,
         }),
       });
+      if (!res.ok) {
+        await refetch();
+        return;
+      }
+      void refetch();
     } catch (error) {
       console.error("Action error:", error);
+      await refetch();
     } finally {
       setIsSubmitting(false);
     }

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo } from "react";
 import { useSession } from "@/hooks/use-session";
-import { useGameState } from "@/hooks/use-game-state";
+import { useGameState, type GameState } from "@/hooks/use-game-state";
 import { usePresence } from "@/hooks/use-presence";
 import type { Room, Player, Hand, PlayerHand } from "@/lib/supabase/types";
 
@@ -19,6 +19,7 @@ interface GameContextValue {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  mutate: (updater: (prev: GameState) => GameState) => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Room, Player, Hand, PlayerHand } from "@/lib/supabase/types";
 
-interface GameState {
+export interface GameState {
   room: Room | null;
   players: Player[];
   hand: Hand | null;
@@ -99,6 +99,13 @@ export function useGameState(roomCode: string, sessionId: string | null) {
       error: null,
     });
   }, [roomCode, sessionId]);
+
+  const mutate = useCallback(
+    (updater: (prev: GameState) => GameState) => {
+      setState((prev) => updater(prev));
+    },
+    []
+  );
 
   useEffect(() => {
     isMounted.current = true;
@@ -203,5 +210,6 @@ export function useGameState(roomCode: string, sessionId: string | null) {
   return {
     ...state,
     refetch: fetchGameState,
+    mutate,
   };
 }
