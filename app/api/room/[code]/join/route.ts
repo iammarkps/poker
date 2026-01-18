@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { all } from "better-all";
 
 export async function POST(
   request: Request,
@@ -40,13 +41,23 @@ export async function POST(
       );
     }
 
-    // Check if player already in room
-    const { data: existingPlayer } = await supabase
-      .from("players")
-      .select("*")
-      .eq("room_id", room.id)
-      .eq("session_id", sessionId)
-      .single();
+    // Parallelize: check existing player + get all players (both need room.id)
+    const { existingPlayerResult, playersResult } = await all({
+      async existingPlayerResult() {
+        return supabase
+          .from("players")
+          .select("*")
+          .eq("room_id", room.id)
+          .eq("session_id", sessionId)
+          .single();
+      },
+      async playersResult() {
+        return supabase.from("players").select("seat").eq("room_id", room.id);
+      },
+    });
+
+    const { data: existingPlayer } = existingPlayerResult;
+    const { data: players } = playersResult;
 
     if (existingPlayer) {
       // Update name and reconnect
@@ -57,12 +68,6 @@ export async function POST(
 
       return NextResponse.json({ success: true, playerId: existingPlayer.id });
     }
-
-    // Get current players to find next available seat
-    const { data: players } = await supabase
-      .from("players")
-      .select("seat")
-      .eq("room_id", room.id);
 
     if (players && players.length >= room.max_players) {
       return NextResponse.json(

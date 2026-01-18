@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createDeck, shuffleDeck, dealCards } from "@/lib/poker/deck";
+import { all } from "better-all";
 
 export async function POST(
   request: Request,
@@ -39,22 +40,29 @@ export async function POST(
       );
     }
 
-    // Get last hand to determine new dealer position
-    const { data: lastHand } = await supabase
-      .from("hands")
-      .select("*")
-      .eq("room_id", room.id)
-      .order("version", { ascending: false })
-      .limit(1)
-      .single();
+    // Parallelize: lastHand and players only depend on room.id
+    const { lastHandResult, playersResult } = await all({
+      async lastHandResult() {
+        return supabase
+          .from("hands")
+          .select("*")
+          .eq("room_id", room.id)
+          .order("version", { ascending: false })
+          .limit(1)
+          .single();
+      },
+      async playersResult() {
+        return supabase
+          .from("players")
+          .select("*")
+          .eq("room_id", room.id)
+          .gt("chips", 0)
+          .order("seat");
+      },
+    });
 
-    // Get players with chips
-    const { data: players, error: playersError } = await supabase
-      .from("players")
-      .select("*")
-      .eq("room_id", room.id)
-      .gt("chips", 0)
-      .order("seat");
+    const { data: lastHand } = lastHandResult;
+    const { data: players, error: playersError } = playersResult;
 
     if (playersError || !players || players.length < 2) {
       return NextResponse.json(
@@ -106,14 +114,19 @@ export async function POST(
 
     // Every 10 hands, add 1 time bank (up to 5 max)
     if (newHandCount % 10 === 0) {
-      const timeBankUpdates = players.map((player) => {
-        const newTimeBank = Math.min((player.time_bank || 3) + 1, 5);
-        return supabase
-          .from("players")
-          .update({ time_bank: newTimeBank })
-          .eq("id", player.id);
-      });
-      await Promise.all(timeBankUpdates);
+      const timeBankTasks = Object.fromEntries(
+        players.map((player) => [
+          player.id,
+          async () => {
+            const newTimeBank = Math.min((player.time_bank || 3) + 1, 5);
+            return supabase
+              .from("players")
+              .update({ time_bank: newTimeBank })
+              .eq("id", player.id);
+          },
+        ])
+      );
+      await all(timeBankTasks);
     }
 
     // Create new hand
@@ -177,26 +190,26 @@ export async function POST(
     }
 
     // Deduct blinds from players
-    const blindUpdates = [];
+    const blindTasks: Record<string, () => Promise<unknown>> = {};
     if (smallBlindPlayer) {
-      blindUpdates.push(
+      blindTasks.smallBlind = async () =>
         supabase
           .from("players")
           .update({ chips: smallBlindPlayer.chips - room.small_blind })
-          .eq("id", smallBlindPlayer.id)
-      );
+          .eq("id", smallBlindPlayer.id);
     }
 
     if (bigBlindPlayer) {
-      blindUpdates.push(
+      blindTasks.bigBlind = async () =>
         supabase
           .from("players")
           .update({ chips: bigBlindPlayer.chips - room.big_blind })
-          .eq("id", bigBlindPlayer.id)
-      );
+          .eq("id", bigBlindPlayer.id);
     }
 
-    await Promise.all(blindUpdates);
+    if (Object.keys(blindTasks).length > 0) {
+      await all(blindTasks);
+    }
 
     return NextResponse.json({ success: true, handId: hand.id });
   } catch (error) {

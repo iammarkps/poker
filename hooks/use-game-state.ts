@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { all } from "better-all";
 import type { Room, Player, Hand, PlayerHand } from "@/lib/supabase/types";
 
 export interface GameState {
@@ -50,27 +51,27 @@ export function useGameState(roomCode: string, sessionId: string | null) {
       return;
     }
 
-    const playersPromise = supabase
-      .from("players")
-      .select("*")
-      .eq("room_id", room.id)
-      .order("seat");
-
-    const handPromise =
-      room.status === "playing"
-        ? supabase
-            .from("hands")
-            .select("*")
-            .eq("room_id", room.id)
-            .order("version", { ascending: false })
-            .limit(1)
-            .single()
-        : Promise.resolve({ data: null as Hand | null });
-
-    const [{ data: players }, { data: handData }] = await Promise.all([
-      playersPromise,
-      handPromise,
-    ]);
+    const { players, handData } = await all({
+      players: async () => {
+        const { data } = await supabase
+          .from("players")
+          .select("*")
+          .eq("room_id", room.id)
+          .order("seat");
+        return data;
+      },
+      handData: async () => {
+        if (room.status !== "playing") return null as Hand | null;
+        const { data } = await supabase
+          .from("hands")
+          .select("*")
+          .eq("room_id", room.id)
+          .order("version", { ascending: false })
+          .limit(1)
+          .single();
+        return data;
+      },
+    });
 
     if (!isMounted.current) return;
 
@@ -320,7 +321,14 @@ export function useGameState(roomCode: string, sessionId: string | null) {
       isMounted.current = false;
       supabase.removeChannel(channel);
     };
-  }, [roomCode, sessionId]); // Minimal dependencies - refetch functions handle their own deps
+  }, [
+    roomCode,
+    sessionId,
+    fetchGameState,
+    fetchTable,
+    state.room?.id,
+    state.hand?.id,
+  ]);
 
   // Re-subscribe when room or hand IDs change to get correct filters
   useEffect(() => {

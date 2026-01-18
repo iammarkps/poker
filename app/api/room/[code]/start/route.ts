@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createDeck, shuffleDeck, dealCards } from "@/lib/poker/deck";
+import { all } from "better-all";
 
 export async function POST(
   request: Request,
@@ -147,9 +148,31 @@ export async function POST(
       };
     });
 
-    const { error: playerHandsError } = await supabase
-      .from("player_hands")
-      .insert(playerHandsInserts);
+    // Parallelize: player hands insert + blind deductions (both independent)
+    const smallBlindPlayer = players.find((p) => p.seat === smallBlindSeat);
+    const bigBlindPlayer = players.find((p) => p.seat === bigBlindSeat);
+
+    const tasks: Record<string, () => Promise<unknown>> = {
+      playerHandsInsert: async () =>
+        supabase.from("player_hands").insert(playerHandsInserts),
+    };
+    if (smallBlindPlayer) {
+      tasks.smallBlind = async () =>
+        supabase
+          .from("players")
+          .update({ chips: smallBlindPlayer.chips - room.small_blind })
+          .eq("id", smallBlindPlayer.id);
+    }
+    if (bigBlindPlayer) {
+      tasks.bigBlind = async () =>
+        supabase
+          .from("players")
+          .update({ chips: bigBlindPlayer.chips - room.big_blind })
+          .eq("id", bigBlindPlayer.id);
+    }
+
+    const { playerHandsInsert } = await all(tasks);
+    const { error: playerHandsError } = playerHandsInsert as { error?: unknown };
 
     if (playerHandsError) {
       console.error("Player hands error:", playerHandsError);
@@ -158,31 +181,6 @@ export async function POST(
         { status: 500 }
       );
     }
-
-    // Deduct blinds from players
-    const smallBlindPlayer = players.find((p) => p.seat === smallBlindSeat);
-    const bigBlindPlayer = players.find((p) => p.seat === bigBlindSeat);
-
-    const blindUpdates = [];
-    if (smallBlindPlayer) {
-      blindUpdates.push(
-        supabase
-          .from("players")
-          .update({ chips: smallBlindPlayer.chips - room.small_blind })
-          .eq("id", smallBlindPlayer.id)
-      );
-    }
-
-    if (bigBlindPlayer) {
-      blindUpdates.push(
-        supabase
-          .from("players")
-          .update({ chips: bigBlindPlayer.chips - room.big_blind })
-          .eq("id", bigBlindPlayer.id)
-      );
-    }
-
-    await Promise.all(blindUpdates);
 
     return NextResponse.json({ success: true, handId: hand.id });
   } catch (error) {
